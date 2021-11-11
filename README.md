@@ -4,6 +4,8 @@
 
 This addon for Godot will automatically import any `.bvh` file in your project directory.
 
+![JfbaPTM1eA](https://user-images.githubusercontent.com/32321/141242591-1496cbbd-18d5-429e-bba3-449ed9db0daf.gif)
+
 Changes to the file will be automatically picked up, and your scene updated.
 
 ## How to Use:

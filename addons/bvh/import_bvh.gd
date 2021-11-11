@@ -20,8 +20,8 @@
 #	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #	SOFTWARE.
 
-tool
-extends EditorSceneImporter
+@tool
+extends EditorSceneFormatImporter
 
 const settings_blender_path = "filesystem/import/blend/blender_path"
 
@@ -48,7 +48,7 @@ func _get_extensions():
 
 
 func _get_import_flags():
-	return EditorSceneImporter.IMPORT_SCENE
+	return EditorSceneFormatImporter.IMPORT_SCENE
 
 
 func _add_all_gltf_nodes_to_skin(obj: Dictionary):
@@ -88,20 +88,21 @@ func _add_all_glb_nodes_to_skin(path):
 
 	if chunk_type != 0x4E4F534A:
 		return ERR_PARSE_ERROR
-	var orig_json_utf8 : PoolByteArray = f.get_buffer(chunk_length)
-	var rest_data : PoolByteArray = f.get_buffer(full_length - chunk_length - 20)
-	if (f.get_len() != full_length):
+	var orig_json_utf8 : PackedByteArray = f.get_buffer(chunk_length)
+	var rest_data : PackedByteArray = f.get_buffer(full_length - chunk_length - 20)
+	if (f.get_length() != full_length):
 		push_error("Incorrect full_length in " + str(path))
 
 	f.close()
-
-	var gltf_json_parsed_result: JSONParseResult = JSON.parse(orig_json_utf8.get_string_from_utf8())
-	if gltf_json_parsed_result.error != OK:
-		push_error("Failed to parse JSON part of glTF file in " + str(path) + ":" + str(gltf_json_parsed_result.error_line) + ": " + gltf_json_parsed_result.error_string)
+	
+	var json : JSON = JSON.new()
+	var error = json.parse(orig_json_utf8.get_string_from_utf8())
+	if error != OK:
+		push_error("Failed to parse JSON part of glTF file in " + str(path) + ":" + str(json.get_error_line()) + ": " + json.get_error_message())
 		return ERR_FILE_UNRECOGNIZED
-	var gltf_json_parsed: Dictionary = gltf_json_parsed_result.result
-	_add_all_gltf_nodes_to_skin(gltf_json_parsed)
-	var json_utf8: PoolByteArray = JSON.print(gltf_json_parsed).to_utf8()
+	var gltf_json_parsed: Dictionary = json.get_data()
+	_add_all_gltf_nodes_to_skin(gltf_json_parsed)	
+	var json_utf8: PackedByteArray = json.stringify(gltf_json_parsed).to_utf8_buffer()
 
 	f = File.new()
 	if f.open(path, File.WRITE) != OK:
@@ -120,13 +121,13 @@ func _import_scene(path: String, flags: int, bake_fps: int):
 	import_config_file.load(path + ".import")
 	var compression_flags: int = import_config_file.get_value("params", "meshes/compress", 0)
 	# ARRAY_COMPRESS_BASE = (ARRAY_INDEX + 1)
-	compression_flags = compression_flags << (VisualServer.ARRAY_INDEX + 1)
+	compression_flags = compression_flags << (RenderingServer.ARRAY_INDEX + 1)
 	if import_config_file.get_value("params", "meshes/octahedral_compression", false):
-		compression_flags |= VisualServer.ARRAY_FLAG_USE_OCTAHEDRAL_COMPRESSION
+		compression_flags |= RenderingServer.ARRAY_FLAG_USE_OCTAHEDRAL_COMPRESSION
 
 	var path_global : String = ProjectSettings.globalize_path(path)
 	path_global = path_global.c_escape()
-	var output_path : String = "res://.import/" + path.get_file() + "-" + path.md5_text() + ".glb"
+	var output_path : String = "res://.godot/imported/" + path.get_file().get_basename() + "-" + path.md5_text() + ".glb"
 	var output_path_global = ProjectSettings.globalize_path(output_path)
 	output_path_global = output_path_global.c_escape()
 	var stdout = [].duplicate()
@@ -150,7 +151,7 @@ func _import_scene(path: String, flags: int, bake_fps: int):
 		"--python-expr",
 		script]
 	print(args)
-	var ret = OS.execute(addon_path_global, args, true, stdout, true)
+	var ret = OS.execute(addon_path_global, args, stdout, true)
 	for line in stdout:
 		print(line)
 	if ret != 0:
@@ -158,12 +159,10 @@ func _import_scene(path: String, flags: int, bake_fps: int):
 		return null
 
 	_add_all_glb_nodes_to_skin(output_path)
-
-	var root_node: Spatial = null
-	if Engine.get_version_info()["major"] <= 3 and Engine.get_version_info()["minor"] <= 3:
-		root_node = call("import_scene_from_other_importer", output_path, flags, bake_fps)
-	else:
-		root_node = call("import_scene_from_other_importer", output_path, flags, bake_fps, compression_flags)
+	var gstate : GLTFState = GLTFState.new()
+	var gltf : GLTFDocument = GLTFDocument.new()
+	var root_node : Node = gltf.import_scene(output_path, 0, 1000.0, gstate)
+	root_node.name = path.get_basename().get_file()
 	return root_node
 
 

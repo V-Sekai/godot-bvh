@@ -15,7 +15,7 @@ config/icon="res://icon.png"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/blend/plugin.cfg")
+enabled=PackedStringArray("res://addons/bvh/plugin.cfg")
 
 [filesystem]
 
@@ -40,10 +40,6 @@ scene={
 "nodes/root_type": "Node3D",
 "skins/use_named_skins": true
 }
-
-[filesystem]
-
-import/blend/blender_path="blender"
 
 [physics]
 
